@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HiGOD Chat - Realtime Messaging</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <!-- Auth Overlay -->
+    <div id="auth-overlay" class="overlay">
+        <div class="auth-card">
+            <div class="auth-header">
+                <h2>Welcome to HiGOD</h2>
+                <p>Connect with anyone, anywhere.</p>
+            </div>
+            
+            <div class="auth-toggle">
+                <button id="btn-show-login" class="active">Login</button>
+                <button id="btn-show-register">Register</button>
+            </div>
+
+            <!-- Login Form -->
+            <form id="login-form">
+                <div class="input-group">
+                    <i class="fas fa-user icon"></i>
+                    <input type="text" id="login-username" placeholder="Username" required autocomplete="username">
+                </div>
+                <div class="input-group">
+                    <i class="fas fa-lock icon"></i>
+                    <input type="password" id="login-password" placeholder="Password" required autocomplete="current-password">
+                </div>
+                <div id="login-error" class="error-text"></div>
+                <button type="submit" class="btn-primary">Sign In <i class="fas fa-arrow-right"></i></button>
+            </form>
+
+            <!-- Register Form (Hidden by default) -->
+            <form id="register-form" style="display: none;">
+                <div class="input-group">
+                    <i class="fas fa-user icon"></i>
+                    <input type="text" id="register-username" placeholder="Username" required autocomplete="username">
+                </div>
+                <div class="input-group">
+                    <i class="fas fa-lock icon"></i>
+                    <input type="password" id="register-password" minlength="6" placeholder="Password (min 6 chars)" required autocomplete="new-password">
+                </div>
+                <div id="register-error" class="error-text"></div>
+                <button type="submit" class="btn-primary">Create Account <i class="fas fa-user-plus"></i></button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Chat App -->
+    <div id="app-container" class="hidden">
+        
+        <!-- Sidebar: Users and Rooms -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="brand">
+                    <div class="logo"></div>
+                    <h2>HiGOD</h2>
+                </div>
+                <div class="user-profile">
+                    <span id="current-username">User</span>
+                    <button id="btn-logout" title="Logout"><i class="fas fa-sign-out-alt"></i></button>
+                </div>
+            </div>
+
+            <div class="sidebar-content">
+                <!-- Public Room -->
+                <div class="section">
+                    <h3 class="section-title">Rooms</h3>
+                    <ul class="room-list">
+                        <li class="room-item active" id="room-public" onclick="selectConversation(null, 'Public Chat', this)">
+                            <div class="room-avatar"><i class="fas fa-globe"></i></div>
+                            <div class="room-info">
+                                <span class="room-name">Global Chat</span>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Users List -->
+                <div class="section">
+                    <h3 class="section-title">Direct Messages</h3>
+                    <div class="sidebar-search">
+                        <i class="fas fa-search search-icon"></i>
+                        <input type="text" id="search-users" autocomplete="off" placeholder="Search direct messages...">
+                    </div>
+                    <ul class="user-list" id="users-list">
+                        <!-- Populated by JS -->
+                    </ul>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <main class="chat-area">
+            <header class="chat-header">
+                <div class="chat-title-info">
+                    <h2 id="chat-title">Global Chat</h2>
+                    <span id="chat-status" class="status-indicator online"></span>
+                </div>
+            </header>
+
+            <div class="messages-container" id="messages-container">
+                <!-- Messages populated by JS -->
+                <div class="welcome-message">
+                    <i class="fas fa-comments"></i>
+                    <p>Welcome to the chat!</p>
+                </div>
+            </div>
+            
+            <div id="typing-indicator" class="typing-indicator hidden">
+                <span id="typing-text">Someone is typing</span>
+                <span class="dots">...</span>
+            </div>
+
+            <footer class="chat-input-area">
+                <form id="message-form">
+                    <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off">
+                    <button type="submit" id="btn-send"><i class="fas fa-paper-plane"></i></button>
+                </form>
+            </footer>
+        </main>
+    </div>
+
+    <!-- Socket.io -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
