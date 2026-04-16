@@ -314,12 +314,17 @@ body {
     display: flex;
     align-items: center;
     gap: 15px;
+    min-width: 0;
 }
 
 #current-username {
     font-weight: 600;
     font-size: 1rem;
     color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 130px;
 }
 
 #btn-logout {
