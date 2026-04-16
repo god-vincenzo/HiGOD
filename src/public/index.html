@@ -77,10 +77,10 @@
             </div>
 
             <div class="sidebar-content">
-                <!-- Public Room -->
+                <!-- Public Room & Custom Rooms -->
                 <div class="section">
-                    <h3 class="section-title">Rooms</h3>
-                    <ul class="room-list">
+                    <h3 class="section-title">Rooms <i class="fas fa-plus" id="btn-add-room" style="float: right; cursor: pointer; color: var(--accent-secondary);" title="Create/Join Room"></i></h3>
+                    <ul class="room-list" id="rooms-list">
                         <li class="room-item active" id="room-public" onclick="selectConversation(null, 'Public Chat', this)">
                             <div class="room-avatar"><i class="fas fa-globe"></i></div>
                             <div class="room-info">
@@ -133,6 +133,51 @@
                 </form>
             </footer>
         </main>
+    </div>
+
+    <!-- Room Modal Overlay -->
+    <div id="room-modal" class="overlay hidden">
+        <div class="auth-card">
+            <div class="auth-header">
+                <h2>Manage Rooms</h2>
+                <p>Create or join a pinned room</p>
+            </div>
+            <div class="auth-toggle">
+                <button id="btn-show-create-room" class="active">Create</button>
+                <button id="btn-show-join-room">Join</button>
+            </div>
+
+            <!-- Create Room Form -->
+            <form id="create-room-form">
+                <div class="input-group">
+                    <i class="fas fa-users icon"></i>
+                    <input type="text" id="create-room-name" placeholder="Room Name" required>
+                </div>
+                <div class="input-group">
+                    <i class="fas fa-key icon"></i>
+                    <input type="text" id="create-room-pin" placeholder="PIN" required>
+                </div>
+                <div id="create-room-error" class="error-text"></div>
+                <button type="submit" class="btn-primary">Create Room <i class="fas fa-plus"></i></button>
+            </form>
+
+            <!-- Join Room Form -->
+            <form id="join-room-form" style="display: none;">
+                <div class="input-group">
+                    <i class="fas fa-users icon"></i>
+                    <input type="text" id="join-room-name" placeholder="Room Name" required>
+                </div>
+                <div class="input-group">
+                    <i class="fas fa-key icon"></i>
+                    <input type="text" id="join-room-pin" placeholder="PIN" required>
+                </div>
+                <div id="join-room-error" class="error-text"></div>
+                <button type="submit" class="btn-primary">Join Room <i class="fas fa-sign-in-alt"></i></button>
+            </form>
+            <div style="text-align: center; margin-top: 15px;">
+                <button id="btn-close-room-modal" style="background:transparent;border:none;color:var(--text-secondary);cursor:pointer;">Cancel</button>
+            </div>
+        </div>
     </div>
 
     <!-- Socket.io -->

@@ -1,4 +1,5 @@
 module.exports = {
   users: [],
-  messages: []
+  messages: [],
+  rooms: []
 };

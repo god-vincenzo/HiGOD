@@ -17,11 +17,22 @@ const searchInput = document.getElementById('search-users');
 const chatTitle = document.getElementById('chat-title');
 const typingIndicator = document.getElementById('typing-indicator');
 const typingText = document.getElementById('typing-text');
+const roomModal = document.getElementById('room-modal');
+const btnAddRoom = document.getElementById('btn-add-room');
+const btnShowCreateRoom = document.getElementById('btn-show-create-room');
+const btnShowJoinRoom = document.getElementById('btn-show-join-room');
+const createRoomForm = document.getElementById('create-room-form');
+const joinRoomForm = document.getElementById('join-room-form');
+const createRoomError = document.getElementById('create-room-error');
+const joinRoomError = document.getElementById('join-room-error');
+const btnCloseRoomModal = document.getElementById('btn-close-room-modal');
+const roomsList = document.getElementById('rooms-list');
 
 // State
 let socket = null;
 let currentUser = null;
-let selectedUserId = null; // null means 'public'
+let selectedUserId = null; // null means 'public' or custom room
+let selectedCustomRoomId = null;
 let allUsers = [];
 let onlineUsersIds = [];
 let typingTimeout = null;
@@ -45,6 +56,28 @@ btnShowRegister.addEventListener('click', () => {
     btnShowLogin.classList.remove('active');
     registerForm.style.display = 'block';
     loginForm.style.display = 'none';
+});
+
+// Room Modal Toggle
+if (btnAddRoom) {
+    btnAddRoom.addEventListener('click', () => {
+        roomModal.classList.remove('hidden');
+    });
+}
+btnCloseRoomModal.addEventListener('click', () => {
+    roomModal.classList.add('hidden');
+});
+btnShowCreateRoom.addEventListener('click', () => {
+    btnShowCreateRoom.classList.add('active');
+    btnShowJoinRoom.classList.remove('active');
+    createRoomForm.style.display = 'block';
+    joinRoomForm.style.display = 'none';
+});
+btnShowJoinRoom.addEventListener('click', () => {
+    btnShowJoinRoom.classList.add('active');
+    btnShowCreateRoom.classList.remove('active');
+    joinRoomForm.style.display = 'block';
+    createRoomForm.style.display = 'none';
 });
 
 // Check if already logged in
@@ -133,6 +166,7 @@ function initSocket() {
             allUsers = users.filter(u => u._id !== currentUser.id);
             renderUsers();
         });
+        socket.emit('getCustomRooms', renderCustomRooms);
         // Initial history load for public
         loadHistory(null);
     });
@@ -157,8 +191,11 @@ function initSocket() {
         // Only append if it's for the currently open window
         const isPublicMsg = message.room === 'public';
         const isCurrentPrivate = selectedUserId && message.room.includes(currentUser.id) && message.room.includes(selectedUserId);
+        const isCurrentCustom = selectedCustomRoomId && message.room === `custom_${selectedCustomRoomId}`;
         
-        if ((!selectedUserId && isPublicMsg) || (selectedUserId && isCurrentPrivate)) {
+        if ((!selectedUserId && !selectedCustomRoomId && isPublicMsg) || 
+            (selectedUserId && isCurrentPrivate) ||
+            (selectedCustomRoomId && isCurrentCustom)) {
             appendMessage(message);
         } else {
             // Future UI enhancement: Add badge unread count to user in sidebar
@@ -219,6 +256,69 @@ function renderUsers() {
     createSection('Offline Users', offlineUsers, '⚫');
 }
 
+let customRooms = [];
+
+function renderCustomRooms(rooms) {
+    customRooms = rooms;
+    roomsList.innerHTML = `
+        <li class="room-item ${(!selectedUserId && !selectedCustomRoomId) ? 'active' : ''}" id="room-public" onclick="selectConversation(null, 'Global Chat', this)">
+            <div class="room-avatar"><i class="fas fa-globe"></i></div>
+            <div class="room-info"><span class="room-name">Global Chat</span></div>
+        </li>
+    `;
+    
+    rooms.forEach(room => {
+        const li = document.createElement('li');
+        li.className = 'room-item custom-room';
+        if (selectedCustomRoomId === room._id) li.classList.add('active');
+        
+        li.innerHTML = `
+            <div class="room-avatar"><i class="fas fa-users"></i></div>
+            <div class="room-info"><span class="room-name">${escapeHTML(room.name)}</span></div>
+        `;
+        li.onclick = () => selectConversation(null, room.name, li, true, room._id);
+        roomsList.appendChild(li);
+    });
+}
+
+createRoomForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    createRoomError.innerText = '';
+    const name = document.getElementById('create-room-name').value.trim();
+    const pin = document.getElementById('create-room-pin').value.trim();
+    if(socket) {
+        socket.emit('createRoom', { name, pin }, (res) => {
+            if(res.success) {
+                roomModal.classList.add('hidden');
+                createRoomForm.reset();
+                if(socket) socket.emit('getCustomRooms', renderCustomRooms);
+                selectConversation(null, res.room.name, null, true, res.room._id);
+            } else {
+                createRoomError.innerText = res.message;
+            }
+        });
+    }
+});
+
+joinRoomForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    joinRoomError.innerText = '';
+    const name = document.getElementById('join-room-name').value.trim();
+    const pin = document.getElementById('join-room-pin').value.trim();
+    if(socket) {
+        socket.emit('joinRoomWithPin', { name, pin }, (res) => {
+            if(res.success) {
+                roomModal.classList.add('hidden');
+                joinRoomForm.reset();
+                if(socket) socket.emit('getCustomRooms', renderCustomRooms);
+                selectConversation(null, res.room.name, null, true, res.room._id);
+            } else {
+                joinRoomError.innerText = res.message;
+            }
+        });
+    }
+});
+
 window.toggleStar = async (userId, e) => {
     e.stopPropagation();
     const user = allUsers.find(u => u._id === userId);
@@ -247,25 +347,37 @@ window.toggleStar = async (userId, e) => {
 };
 
 // Select Conversation
-window.selectConversation = (userId, displayName, element) => {
+window.selectConversation = (userId, displayName, element, isCustomRoom = false, roomId = null) => {
     // UI Update active list item
     document.querySelectorAll('.room-item').forEach(el => el.classList.remove('active'));
     if(element) element.classList.add('active');
+    else {
+        // Try to find it if we just created/joined
+        if (isCustomRoom) {
+            setTimeout(() => {
+                const items = document.querySelectorAll('.custom-room');
+                items.forEach(i => { if(i.innerText.includes(displayName)) i.classList.add('active'); });
+            }, 100);
+        }
+    }
     
     chatTitle.innerText = displayName;
     selectedUserId = userId;
+    selectedCustomRoomId = isCustomRoom ? roomId : null;
     
     if (userId) {
         socket.emit('joinPrivateRoom', userId);
+    } else if (isCustomRoom) {
+        socket.emit('joinCustomRoomSocket', roomId);
     }
     
     // Clear chat and load history
     messagesContainer.innerHTML = '<div class="welcome-message"><p>Loading...</p></div>';
-    loadHistory(userId);
+    loadHistory(userId, selectedCustomRoomId);
 }
 
-function loadHistory(userId) {
-    socket.emit('getHistory', { targetUserId: userId }, (messages) => {
+function loadHistory(userId, customRoomId = null) {
+    socket.emit('getHistory', { targetUserId: userId, customRoomId }, (messages) => {
         messagesContainer.innerHTML = '';
         if (messages.length === 0) {
             messagesContainer.innerHTML = `
@@ -311,22 +423,23 @@ messageForm.addEventListener('submit', (e) => {
 
     socket.emit('sendMessage', {
         targetUserId: selectedUserId,
+        customRoomId: selectedCustomRoomId,
         message: content
     });
 
     messageInput.value = '';
-    socket.emit('typing', { isTyping: false, targetUserId: selectedUserId });
+    socket.emit('typing', { isTyping: false, targetUserId: selectedUserId, customRoomId: selectedCustomRoomId });
 });
 
 // Typing Indicator Emission
 messageInput.addEventListener('input', () => {
     if (!socket) return;
     
-    socket.emit('typing', { isTyping: true, targetUserId: selectedUserId });
+    socket.emit('typing', { isTyping: true, targetUserId: selectedUserId, customRoomId: selectedCustomRoomId });
     
     clearTimeout(typingTimeout);
     typingTimeout = setTimeout(() => {
-        socket.emit('typing', { isTyping: false, targetUserId: selectedUserId });
+        socket.emit('typing', { isTyping: false, targetUserId: selectedUserId, customRoomId: selectedCustomRoomId });
     }, 2000);
 });
 

@@ -11,6 +11,7 @@ const Message = require('./src/models/Message');
 const authRoutes = require('./src/routes/authRoutes');
 const userRoutes = require('./src/routes/userRoutes');
 const memoryStore = require('./src/models/memoryStore');
+const Room = require('./src/models/Room');
 
 // Load environment variables. Fallback to .env.example if .env is missing for local dev.
 dotenv.config();
@@ -80,15 +81,28 @@ io.on('connection', async (socket) => {
     console.log(`${socket.username} joined private room ${roomName}`);
   });
 
+  // Join a custom room for real-time events
+  socket.on('joinCustomRoomSocket', (roomId) => {
+    const roomName = `custom_${roomId}`;
+    socket.join(roomName);
+  });
+
   // Handle incoming public message
   socket.on('sendMessage', async (data) => {
     try {
-      const { room, message, targetUserId } = data;
+      const { room, message, targetUserId, customRoomId } = data;
       
+      let targetRoomName = 'public';
+      if (customRoomId) {
+          targetRoomName = `custom_${customRoomId}`;
+      } else if (targetUserId) {
+          targetRoomName = [socket.userId, targetUserId].sort().join('_');
+      }
+
       // Save to database
       const newMessage = new Message({
         sender: socket.userId,
-        room: targetUserId ? [socket.userId, targetUserId].sort().join('_') : 'public',
+        room: targetRoomName,
         content: message
       });
       
@@ -107,7 +121,9 @@ io.on('connection', async (socket) => {
         createdAt: newMessage.createdAt || new Date()
       };
 
-      if (targetUserId) {
+      if (customRoomId) {
+        io.to(targetRoomName).emit('newMessage', messageObj);
+      } else if (targetUserId) {
         // Send to private room
         const roomName = [socket.userId, targetUserId].sort().join('_');
         io.to(roomName).emit('newMessage', messageObj);
@@ -123,13 +139,16 @@ io.on('connection', async (socket) => {
 
   // Handle typing status
   socket.on('typing', (data) => {
-    const { isTyping, room, targetUserId } = data;
+    const { isTyping, room, targetUserId, customRoomId } = data;
     const typingData = {
       username: socket.username,
       isTyping
     };
     
-    if (targetUserId) {
+    if (customRoomId) {
+      const roomName = `custom_${customRoomId}`;
+      socket.to(roomName).emit('userTyping', typingData);
+    } else if (targetUserId) {
       const roomName = [socket.userId, targetUserId].sort().join('_');
       socket.to(roomName).emit('userTyping', typingData);
     } else {
@@ -139,8 +158,13 @@ io.on('connection', async (socket) => {
 
   // Handle getting message history
   socket.on('getHistory', async (data, callback) => {
-    const { targetUserId } = data;
-    const roomName = targetUserId ? [socket.userId, targetUserId].sort().join('_') : 'public';
+    const { targetUserId, customRoomId } = data;
+    let roomName = 'public';
+    if (customRoomId) {
+        roomName = `custom_${customRoomId}`;
+    } else if (targetUserId) {
+        roomName = [socket.userId, targetUserId].sort().join('_');
+    }
 
     if (mongoose.connection.readyState !== 1) {
         const history = memoryStore.messages
@@ -167,6 +191,79 @@ io.on('connection', async (socket) => {
     } catch (err) {
       console.error('Error fetching history:', err);
       callback([]);
+    }
+  });
+
+  // Handle getting custom rooms
+  socket.on('getCustomRooms', async (callback) => {
+    try {
+      if (mongoose.connection.readyState === 1) {
+        const rooms = await Room.find({ participants: socket.userId }).lean();
+        callback(rooms.map(r => ({ _id: r._id, name: r.name })));
+      } else {
+        const rooms = memoryStore.rooms.filter(r => r.participants.includes(socket.userId));
+        callback(rooms.map(r => ({ _id: r._id, name: r.name })));
+      }
+    } catch (err) {
+      console.error('Error fetching custom rooms:', err);
+      callback([]);
+    }
+  });
+
+  // Handle creating a pinned room
+  socket.on('createRoom', async (data, callback) => {
+    try {
+      const { name, pin } = data;
+      if (!name || !pin) return callback({ success: false, message: 'Name and pin required' });
+      
+      if (mongoose.connection.readyState === 1) {
+        const existing = await Room.findOne({ name });
+        if (existing) return callback({ success: false, message: 'Room name already exists' });
+        
+        const newRoom = new Room({ name, pin, creator: socket.userId, participants: [socket.userId] });
+        await newRoom.save();
+        callback({ success: true, room: { _id: newRoom._id, name: newRoom.name } });
+      } else {
+        const existing = memoryStore.rooms.find(r => r.name === name);
+        if (existing) return callback({ success: false, message: 'Room name already exists' });
+        
+        const newRoom = { _id: Date.now().toString(), name, pin, creator: socket.userId, participants: [socket.userId] };
+        memoryStore.rooms.push(newRoom);
+        callback({ success: true, room: { _id: newRoom._id, name: newRoom.name } });
+      }
+    } catch (err) {
+      console.error('Error creating room:', err);
+      callback({ success: false, message: err.message });
+    }
+  });
+
+  // Handle joining a pinned room
+  socket.on('joinRoomWithPin', async (data, callback) => {
+    try {
+      const { name, pin } = data;
+      if (mongoose.connection.readyState === 1) {
+        const room = await Room.findOne({ name });
+        if (!room) return callback({ success: false, message: 'Room not found' });
+        if (room.pin !== pin) return callback({ success: false, message: 'Incorrect PIN' });
+        
+        if (!room.participants.includes(socket.userId)) {
+          room.participants.push(socket.userId);
+          await room.save();
+        }
+        callback({ success: true, room: { _id: room._id, name: room.name } });
+      } else {
+        const room = memoryStore.rooms.find(r => r.name === name);
+        if (!room) return callback({ success: false, message: 'Room not found' });
+        if (room.pin !== pin) return callback({ success: false, message: 'Incorrect PIN' });
+        
+        if (!room.participants.includes(socket.userId)) {
+          room.participants.push(socket.userId);
+        }
+        callback({ success: true, room: { _id: room._id, name: room.name } });
+      }
+    } catch (err) {
+      console.error('Error joining room:', err);
+      callback({ success: false, message: err.message });
     }
   });
 
