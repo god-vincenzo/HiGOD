@@ -182,38 +182,41 @@ function renderUsers() {
     
     let filteredUsers = allUsers.filter(u => u.username.toLowerCase().includes(searchQuery));
     
-    filteredUsers.sort((a, b) => {
-        const aOnline = onlineUsersIds.includes(a._id) ? 1 : 0;
-        const bOnline = onlineUsersIds.includes(b._id) ? 1 : 0;
-        const aStar = a.isStarred ? 1 : 0;
-        const bStar = b.isStarred ? 1 : 0;
-        
-        let scoreA = aStar * 100 + aOnline * 10;
-        let scoreB = bStar * 100 + bOnline * 10;
-        
-        if (scoreA !== scoreB) return scoreB - scoreA;
-        return a.username.localeCompare(b.username);
-    });
+    const starredUsers = filteredUsers.filter(u => u.isStarred);
+    const onlineUsers = filteredUsers.filter(u => !u.isStarred && onlineUsersIds.includes(u._id));
+    const offlineUsers = filteredUsers.filter(u => !u.isStarred && !onlineUsersIds.includes(u._id));
 
-    filteredUsers.forEach(user => {
-        const isOnline = onlineUsersIds.includes(user._id);
-        const li = document.createElement('li');
-        li.className = 'room-item';
-        if (selectedUserId === user._id) li.classList.add('active');
+    const createSection = (title, users, icon) => {
+        if (users.length === 0) return;
+        const divider = document.createElement('li');
+        divider.className = 'list-divider';
+        divider.innerHTML = `<span>${icon} ${title}</span>`;
+        usersList.appendChild(divider);
         
-        li.innerHTML = `
-            <div class="user-avatar">
-                ${user.username.charAt(0)}
-                <span class="status-dot ${isOnline ? 'online' : ''}"></span>
-            </div>
-            <div class="room-info"><span class="room-name">${user.username}</span></div>
-            <div class="user-item-star" onclick="toggleStar('${user._id}', event)">
-                <i class="${user.isStarred ? 'fas' : 'far'} fa-star ${user.isStarred ? 'text-warning' : ''}"></i>
-            </div>
-        `;
-        li.onclick = () => selectConversation(user._id, user.username, li);
-        usersList.appendChild(li);
-    });
+        users.sort((a,b) => a.username.localeCompare(b.username)).forEach(user => {
+            const isOnline = onlineUsersIds.includes(user._id);
+            const li = document.createElement('li');
+            li.className = 'room-item';
+            if (selectedUserId === user._id) li.classList.add('active');
+            
+            li.innerHTML = `
+                <div class="user-avatar">
+                    ${user.username.charAt(0)}
+                    <span class="status-dot ${isOnline ? 'online' : ''}"></span>
+                </div>
+                <div class="room-info"><span class="room-name">${user.username}</span></div>
+                <div class="user-item-star" onclick="toggleStar('${user._id}', event)">
+                    <i class="${user.isStarred ? 'fas' : 'far'} fa-star ${user.isStarred ? 'text-warning' : ''}"></i>
+                </div>
+            `;
+            li.onclick = () => selectConversation(user._id, user.username, li);
+            usersList.appendChild(li);
+        });
+    };
+
+    createSection('Starred Contacts', starredUsers, '⭐');
+    createSection('Online Users', onlineUsers, '🟢');
+    createSection('Offline Users', offlineUsers, '⚫');
 }
 
 window.toggleStar = async (userId, e) => {
