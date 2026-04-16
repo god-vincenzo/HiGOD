@@ -40,7 +40,7 @@ A full-stack real-time chat application built with Node.js, Express, Socket.io, 
 4. **Access the Application**
    Open your browser and navigate to `http://localhost:3000`
 
-## Deployment Guidelines (Render or Railway)
+## Deployment Guidelines (Render)
 
 ### 1. Database (MongoDB Atlas)
 - Create a free cluster on [MongoDB Atlas](https://www.mongodb.com/cloud/atlas).
@@ -59,11 +59,3 @@ A full-stack real-time chat application built with Node.js, Express, Socket.io, 
    - `JWT_SECRET` -> (your secret)
    - `MONGODB_URI` -> (your atlas uri)
 6. Click **Deploy**.
-
-### 3. Deploying on Railway (Free Tier)
-1. Push this project to a GitHub repository.
-2. Go to [Railway](https://railway.app) and click **New Project** -> **Deploy from GitHub repo**.
-3. Select your repository.
-4. Once added, click on the deployed service -> **Variables** tab.
-5. Add your `JWT_SECRET` and `MONGODB_URI` variables.
-6. Railway will automatically build and deploy it using npm. Go to **Settings** -> **Networking** to generate a public domain URL.

@@ -211,6 +211,13 @@ function initSocket() {
             typingIndicator.classList.add('hidden');
         }
     });
+
+    socket.on('roomDeleted', (roomId) => {
+        if (selectedCustomRoomId === roomId) {
+            selectConversation(null, 'Global Chat', document.getElementById('room-public'));
+        }
+        socket.emit('getCustomRooms', renderCustomRooms);
+    });
 }
 
 // Render Users List
@@ -272,9 +279,17 @@ function renderCustomRooms(rooms) {
         li.className = 'room-item custom-room';
         if (selectedCustomRoomId === room._id) li.classList.add('active');
         
+        const isCreator = room.creator === currentUser.id;
+        const iconClass = isCreator ? 'fa-trash' : 'fa-sign-out-alt';
+        const actionTitle = isCreator ? 'Delete Room' : 'Leave Room';
+        const actionName = isCreator ? 'deleteRoom' : 'leaveRoom';
+
         li.innerHTML = `
             <div class="room-avatar"><i class="fas fa-users"></i></div>
             <div class="room-info"><span class="room-name">${escapeHTML(room.name)}</span></div>
+            <div class="user-item-star room-action-btn" title="${actionTitle}" onclick="handleRoomAction('${room._id}', '${actionName}', event)">
+                <i class="fas ${iconClass} ${isCreator ? 'text-danger' : 'text-warning'}"></i>
+            </div>
         `;
         li.onclick = () => selectConversation(null, room.name, li, true, room._id);
         roomsList.appendChild(li);
@@ -318,6 +333,22 @@ joinRoomForm.addEventListener('submit', (e) => {
         });
     }
 });
+
+window.handleRoomAction = (roomId, action, event) => {
+    event.stopPropagation();
+    if(confirm(`Are you sure you want to ${action === 'deleteRoom' ? 'delete' : 'leave'} this room?`)) {
+        socket.emit(action, roomId, (res) => {
+            if(res.success) {
+                if (selectedCustomRoomId === roomId) {
+                    selectConversation(null, 'Global Chat', document.getElementById('room-public'));
+                }
+                socket.emit('getCustomRooms', renderCustomRooms);
+            } else {
+                alert(res.message);
+            }
+        });
+    }
+};
 
 window.toggleStar = async (userId, e) => {
     e.stopPropagation();

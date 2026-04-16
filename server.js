@@ -199,10 +199,10 @@ io.on('connection', async (socket) => {
     try {
       if (mongoose.connection.readyState === 1) {
         const rooms = await Room.find({ participants: socket.userId }).lean();
-        callback(rooms.map(r => ({ _id: r._id, name: r.name })));
+        callback(rooms.map(r => ({ _id: r._id, name: r.name, creator: r.creator ? r.creator.toString() : null })));
       } else {
         const rooms = memoryStore.rooms.filter(r => r.participants.includes(socket.userId));
-        callback(rooms.map(r => ({ _id: r._id, name: r.name })));
+        callback(rooms.map(r => ({ _id: r._id, name: r.name, creator: r.creator })));
       }
     } catch (err) {
       console.error('Error fetching custom rooms:', err);
@@ -264,6 +264,61 @@ io.on('connection', async (socket) => {
     } catch (err) {
       console.error('Error joining room:', err);
       callback({ success: false, message: err.message });
+    }
+  });
+
+  // Handle deleting a room (creator only)
+  socket.on('deleteRoom', async (roomId, callback) => {
+    try {
+      if (mongoose.connection.readyState === 1) {
+        const room = await Room.findById(roomId);
+        if (!room) return callback({ success: false, message: 'Room not found' });
+        if (room.creator && room.creator.toString() !== socket.userId) return callback({ success: false, message: 'Only creator can delete room' });
+        await Room.findByIdAndDelete(roomId);
+        await Message.deleteMany({ room: `custom_${roomId}` });
+        
+        io.to(`custom_${roomId}`).emit('roomDeleted', roomId);
+        callback({ success: true });
+      } else {
+        const roomIndex = memoryStore.rooms.findIndex(r => r._id === roomId);
+        if (roomIndex === -1) return callback({ success: false, message: 'Room not found' });
+        if (memoryStore.rooms[roomIndex].creator !== socket.userId) return callback({ success: false, message: 'Only creator can delete room' });
+        memoryStore.rooms.splice(roomIndex, 1);
+        memoryStore.messages = memoryStore.messages.filter(m => m.room !== `custom_${roomId}`);
+        
+        io.to(`custom_${roomId}`).emit('roomDeleted', roomId);
+        callback({ success: true });
+      }
+    } catch (err) {
+       console.error('Error deleting room:', err);
+       callback({ success: false, message: err.message });
+    }
+  });
+
+  // Handle leaving a room (participant only)
+  socket.on('leaveRoom', async (roomId, callback) => {
+    try {
+      if (mongoose.connection.readyState === 1) {
+        const room = await Room.findById(roomId);
+        if (!room) return callback({ success: false, message: 'Room not found' });
+        if (room.creator && room.creator.toString() === socket.userId) return callback({ success: false, message: 'Creator must delete the room instead of leaving' });
+        
+        room.participants = room.participants.filter(p => p.toString() !== socket.userId);
+        await room.save();
+        socket.leave(`custom_${roomId}`);
+        callback({ success: true });
+      } else {
+        const room = memoryStore.rooms.find(r => r._id === roomId);
+        if (!room) return callback({ success: false, message: 'Room not found' });
+        if (room.creator === socket.userId) return callback({ success: false, message: 'Creator must delete the room instead of leaving' });
+        
+        room.participants = room.participants.filter(p => p !== socket.userId);
+        socket.leave(`custom_${roomId}`);
+        callback({ success: true });
+      }
+    } catch (err) {
+       console.error('Error leaving room:', err);
+       callback({ success: false, message: err.message });
     }
   });
 

@@ -726,6 +726,11 @@ body {
 }
 #btn-send:active { transform: scale(0.95); }
 
+.text-warning { color: #f1c40f !important; }
+.text-danger { color: #e74c3c !important; }
+.room-action-btn, .user-item-star { cursor: pointer; transition: transform 0.2s; padding: 0 5px; }
+.room-action-btn:hover, .user-item-star:hover { transform: scale(1.2); }
+
 /* Responsive */
 @media (max-width: 850px) {
     #app-container { padding: 0; gap: 0; }
